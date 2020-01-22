@@ -33,9 +33,13 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
 import android.widget.RelativeLayout;
+import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -50,8 +54,12 @@ import com.google.android.gms.nearby.messages.NearbyPermissions;
 import com.google.android.gms.nearby.messages.Strategy;
 import com.google.android.gms.nearby.messages.SubscribeOptions;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class MainActivity extends AppCompatActivity implements
-    GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+    GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener,
+    SharedPreferences.OnSharedPreferenceChangeListener{
 
     private static final String TAG = MainActivity.class.getSimpleName();
 
@@ -64,6 +72,10 @@ public class MainActivity extends AppCompatActivity implements
     private boolean mSubscribed = false;
 
     private static final String KEY_SUBSCRIBED = "subscribed!";
+
+    private ArrayAdapter<String> mNearbyMessagesArrayAdapter;
+
+    private List<String> mNearbyMessagesList = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,10 +92,29 @@ public class MainActivity extends AppCompatActivity implements
         }
 
         if(!havePermissions()) {
-            Log.i(TAG, "Requesting permissions needed fot this application");
+            Log.i(TAG, "Requesting permissions needed for this application");
             requestPermissions();
         }
+
+        if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+        Toast.makeText(this, "Ble not supported!", Toast.LENGTH_SHORT).show();
+            finish();
+        }
+
+        final List<String> cachedMessages = Utils.getCachedMessages(this);
+        if (cachedMessages != null) {
+            mNearbyMessagesList.addAll(cachedMessages);
+        }
+
+        final ListView nearbyMessagesListView = (ListView) findViewById(
+                R.id.nearby_messages_list_view);
+        mNearbyMessagesArrayAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1,
+                mNearbyMessagesList);
+        if (nearbyMessagesListView != null) {
+            nearbyMessagesListView.setAdapter(mNearbyMessagesArrayAdapter);
+        }
     }
+
 
     @Override
     protected void onResume() {
@@ -253,5 +284,14 @@ public class MainActivity extends AppCompatActivity implements
 
     private Intent getBackgroundSubscribeServiceIntent() {
         return new Intent(this, BackgroundSubscribeIntentService.class);
+    }
+
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s) {
+        if (TextUtils.equals(s, Utils.KEY_CACHED_MESSAGES)) {
+            mNearbyMessagesList.clear();
+            mNearbyMessagesList.addAll(Utils.getCachedMessages(this));
+            mNearbyMessagesArrayAdapter.notifyDataSetChanged();
+        }
     }
 }

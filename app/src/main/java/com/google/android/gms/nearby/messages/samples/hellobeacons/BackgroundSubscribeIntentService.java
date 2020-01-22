@@ -36,6 +36,11 @@ import static android.content.ContentValues.TAG;
 
 public class BackgroundSubscribeIntentService extends IntentService {
 
+    private final String TAG = "BackSubIntentService";
+
+    private static final int MESSAGES_NOTIFICATION_ID = 1;
+    private static final int NUM_MESSAGES_IN_NOTIFICATION = 5;
+
     public BackgroundSubscribeIntentService() {
         super("BackgroundSubscribeIntentService");
     }
@@ -52,13 +57,60 @@ public class BackgroundSubscribeIntentService extends IntentService {
                 @Override
                 public void onFound(Message message) {
                     Log.i(TAG, "found message = " + message);
+                    Utils.saveFoundMessage(getApplicationContext(), message);
+                    updateNotification();
                 }
 
                 @Override
                 public void onLost(Message message) {
                     Log.i(TAG, "lost message = " + message);
+                    Utils.removeLostMessage(getApplicationContext(), message);
+                    updateNotification();
                 }
             });
         }
+    }
+
+    private void updateNotification() {
+        List<String> messages = Utils.getCachedMessages(getApplicationContext());
+        NotificationManager notificationManager =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        Intent launchIntent = new Intent(getApplicationContext(), MainActivity.class);
+        launchIntent.setAction(Intent.ACTION_MAIN);
+        launchIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+        PendingIntent pi = PendingIntent.getActivity(getApplicationContext(), 0,
+                launchIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        String contentTitle = getContentTitle(messages);
+        String contentText = getContentText(messages);
+
+        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this)
+                .setSmallIcon(android.R.drawable.star_on)
+                .setContentTitle(contentTitle)
+                .setContentText(contentText)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(contentText))
+                .setOngoing(true)
+                .setContentIntent(pi);
+        notificationManager.notify(MESSAGES_NOTIFICATION_ID, notificationBuilder.build());
+    }
+
+    private String getContentTitle(List<String> messages) {
+        switch (messages.size()) {
+            case 0:
+                return getResources().getString(R.string.scanning);
+            case 1:
+                return getResources().getString(R.string.one_message);
+            default:
+                return getResources().getString(R.string.many_messages, messages.size());
+        }
+    }
+
+    private String getContentText(List<String> messages) {
+        String newline = System.getProperty("line.separator");
+        if (messages.size() < NUM_MESSAGES_IN_NOTIFICATION) {
+            return TextUtils.join(newline, messages);
+        }
+        return TextUtils.join(newline, messages.subList(0, NUM_MESSAGES_IN_NOTIFICATION)) +
+                newline + "&#8230;";
     }
 }
